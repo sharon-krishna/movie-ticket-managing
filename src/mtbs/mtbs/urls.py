@@ -22,6 +22,6 @@ urlpatterns = [
     path('api/v1/', include('api.v1.accounts.urls')),
     path('api/v1/',include('api.v1.movies.urls')),
     path('api/v1/',include('api.v1.theatres.urls')),
-    path('api/v1/',include('api.v1.bookings.urls')),
-    path('api/v1/',include('api.v1.bookings.urls')),
+    path("api/v1/bookings/", include("api.v1.bookings.urls")),
+    path("api/v1/payments/", include("api.v1.payments.urls")),
 ]

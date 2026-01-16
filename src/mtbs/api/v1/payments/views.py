@@ -1,8 +1,10 @@
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from bookings.models import Booking
+from bookings.models import Booking, SeatLock
 from payments.models import Payment
 from .serializers import CreatePaymentSerializer
 import uuid
@@ -35,10 +37,7 @@ class CreatePaymentView(APIView):
             status='INITIATED'
         )
 
-        return Response({
-            'gateway_order_id': gateway_order_id,
-            'amount': payment.amount
-        }, status=status.HTTP_201_CREATED)
+        return Response({'gateway_order_id': gateway_order_id,'amount': payment.amount}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -50,33 +49,78 @@ def payment_webhook(request):
     payment_id = payload.get('payment_id')
     status_flag = payload.get('status')  # SUCCESS / FAILED
 
+    if not gateway_order_id or not status_flag:
+        return Response({"error": "Invalid payload"},status=status.HTTP_400_BAD_REQUEST)
+
+    channel_layer = get_channel_layer()
+
     try:
         with transaction.atomic():
             payment = Payment.objects.select_for_update().get(
                 gateway_order_id=gateway_order_id
             )
 
+            # Idempotency guard
+            if payment.status == 'SUCCESS':
+                return Response({"message": "Already processed"},status=status.HTTP_200_OK)
+
+            booking = payment.booking
+
             if status_flag == 'SUCCESS':
                 payment.status = 'SUCCESS'
                 payment.gateway_payment_id = payment_id
                 payment.save()
 
-                booking = payment.booking
                 booking.status = 'CONFIRMED'
                 booking.save()
+
+                # fetch locked seats BEFORE deleting locks
+                seat_ids = list(
+                    SeatLock.objects.filter(
+                        show=booking.show,
+                        user=booking.user
+                    ).values_list('seat_id', flat=True)
+                )
+
+                # remove locks permanently
+                SeatLock.objects.filter(
+                    show=booking.show,
+                    user=booking.user
+                ).delete()
 
             else:
                 payment.status = 'FAILED'
                 payment.save()
 
-                booking = payment.booking
                 booking.status = 'CANCELLED'
                 booking.save()
 
-    except Payment.DoesNotExist:
-        return Response(
-            {"error": "Invalid order"},
-            status=status.HTTP_400_BAD_REQUEST
+                seat_ids = list(
+                    SeatLock.objects.filter(
+                        show=booking.show,
+                        user=booking.user
+                    ).values_list('seat_id', flat=True)
+                )
+
+                SeatLock.objects.filter(
+                    show=booking.show,
+                    user=booking.user
+                ).delete()
+
+        #WebSocket broadcast AFTER transaction commit
+        async_to_sync(channel_layer.group_send)(
+            f"show_{booking.show_id}",
+            {
+                "type": "seat_event",
+                "data": {
+                    "event": "SEAT_BOOKED" if status_flag == 'SUCCESS' else "SEAT_RELEASED",
+                    "seat_ids": seat_ids,
+                    "booking_id": booking.id
+                }
+            }
         )
 
-    return Response({"message": "Webhook processed"})
+    except Payment.DoesNotExist:
+        return Response({"error": "Invalid order ID"},status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({"message": "Webhook processed"}, status=status.HTTP_200_OK)

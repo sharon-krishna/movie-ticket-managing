@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'django_celery_beat',
+    'channels',
     'accounts',
     'movies',
     'theatres',
@@ -78,10 +80,15 @@ WSGI_APPLICATION = 'mtbs.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'mtbs',
+        'USER': 'postgres',
+        'PASSWORD': 'admin4256',
+        'HOST': 'localhost',  # Set to the correct host if your DB is hosted elsewhere
+        'PORT': '5432',       # Default PostgreSQL port
     }
 }
 
@@ -145,3 +152,17 @@ SIMPLE_JWT = {
 
 SEAT_LOCK_MINUTES = 10
 
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/1'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+
+ASGI_APPLICATION = 'mtbs.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}

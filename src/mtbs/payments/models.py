@@ -10,11 +10,7 @@ class Payment(models.Model):
         ('EXPIRED', 'Expired'),
     )
 
-    booking = models.ForeignKey(
-        Booking,
-        on_delete=models.CASCADE,
-        related_name='payments'
-    )
+    booking = models.ForeignKey(Booking,on_delete=models.CASCADE,related_name='payments')
 
     gateway = models.CharField(max_length=50)
     gateway_order_id = models.CharField(max_length=255, unique=True)

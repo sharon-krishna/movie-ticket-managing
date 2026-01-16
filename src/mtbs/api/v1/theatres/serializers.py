@@ -32,12 +32,7 @@ class ShowSerializer(serializers.ModelSerializer):
         start = data['start_time']
         end = data['end_time']
 
-        conflict = Show.objects.filter(
-            screen=screen
-        ).filter(
-            Q(start_time__lt=end) &
-            Q(end_time__gt=start)
-        )
+        conflict = Show.objects.filter(screen=screen).filter(Q(start_time__lt=end) &Q(end_time__gt=start))
 
         if self.instance:
             conflict = conflict.exclude(id=self.instance.id)

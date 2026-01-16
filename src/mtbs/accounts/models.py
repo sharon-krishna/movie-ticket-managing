@@ -5,22 +5,30 @@ from django.utils import timezone
 
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+    def create_user(self, email, role='USER', password=None):
         if not email:
-            raise ValueError("Email is required")
+            raise ValueError('User must enter Email')
 
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(
+            email=email,
+            role=role
+        )
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
-        extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', 'ADMIN')
-
-        return self.create_user(email, password, **extra_fields)
+    def create_superuser(self, email, password=None):
+        user = self.create_user(
+            email=email,
+            role='ADMIN',
+            password=password
+        )
+        user.is_staff = True
+        user.is_superuser = True
+        user.is_active = True
+        user.save(using=self._db)
+        return user
 
 
 class User(AbstractBaseUser, PermissionsMixin):
